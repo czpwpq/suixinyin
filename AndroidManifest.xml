@@ -1,16 +1,32 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.nfcresearch.qpolllab" android:versionCode="15" android:versionName="2.10-test1">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.nfcresearch.qpolllab.easy" android:versionCode="33" android:versionName="2.20-test3">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
     <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-feature android:name="android.hardware.nfc" android:required="true" />
-    <application android:label="墨水屏刷新测试" android:theme="@style/AppTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:supportsRtl="true">
+    <queries><package android:name="moe.shizuku.privileged.api" /><package android:name="com.android.settings" /></queries>
+    <application android:label="随心印" android:theme="@style/AppTheme" android:icon="@drawable/ic_launcher" android:allowBackup="false" android:extractNativeLibs="true" android:supportsRtl="true">
         <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
-        <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="org.nfcresearch.qpolllab.shizuku" android:multiprocess="false" android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:screenOrientation="portrait">
+        <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="org.nfcresearch.qpolllab.easy.shizuku" android:multiprocess="false" android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+        <provider android:name="org.nfcresearch.qpolllab.activation.InternalBridgeProvider" android:authorities="org.nfcresearch.qpolllab.easy.internal" android:multiprocess="false" android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+        <receiver android:name="org.nfcresearch.qpolllab.InternalPairingReceiver" android:exported="false" />
+        <service android:name="org.nfcresearch.qpolllab.InternalPairingService" android:exported="false" android:foregroundServiceType="shortService" />
+        <service android:name="org.nfcresearch.qpolllab.InternalActivationService" android:exported="false" android:foregroundServiceType="shortService" />
+        <activity android:name="org.nfcresearch.qpolllab.MainActivity" android:exported="true" android:launchMode="singleTask" android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name="com.inkreader.ReaderActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.inkreader.SettingsActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.inkreader.DirectoryActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.inkreader.SearchActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.inkreader.BookmarkActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.inkreader.ReaderRefreshTestActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="org.nfcresearch.qpolllab.InternalActivationActivity" android:exported="false" android:screenOrientation="portrait" />
     </application>
 </manifest>

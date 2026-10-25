@@ -5,11 +5,24 @@ public final class ImageRaster {
     private static final int[] COLORS={0xff000000,0xffffffff,0xfff5cd00,0xffc80000};
     public static int color(int code){if(code<0||code>3)throw new IllegalArgumentException("颜色码错误");return COLORS[code];}
     public static byte[] quantize(int[] pixels,int width,int height,boolean binary,int threshold,boolean dither,int block) {
+        return quantize(pixels,width,height,binary,threshold,dither,block,false);
+    }
+    public static byte[] quantize(int[] pixels,int width,int height,boolean binary,int threshold,boolean dither,int block,boolean perceptual) {
         if(width<=0||height<=0||(long)width*height!=pixels.length||threshold<0||threshold>255)
             throw new IllegalArgumentException("图片参数错误");
         if(block>1) {
             // Binary threshold must be applied after averaging, not to four-color codes.
-            if(!binary)return ImageBlocks.quantize(pixels,width,height,block,COLORS);
+            if(!binary&&!perceptual)return ImageBlocks.quantize(pixels,width,height,block,COLORS);
+            if(!binary){
+                if(block!=2&&block!=4&&block!=8&&block!=16)throw new IllegalArgumentException("色块参数错误");
+                int[] averaged=pixels.clone();
+                for(int y=0;y<height;y+=block)for(int x=0;x<width;x+=block){int right=Math.min(width,x+block),bottom=Math.min(height,y+block),n=(right-x)*(bottom-y);long r=0,g=0,b=0;
+                    for(int yy=y;yy<bottom;yy++)for(int xx=x;xx<right;xx++){int p=pixels[yy*width+xx];r+=(p>>>16)&255;g+=(p>>>8)&255;b+=p&255;}
+                    int p=0xff000000|((int)(r/n)<<16)|((int)(g/n)<<8)|(int)(b/n);
+                    for(int yy=y;yy<bottom;yy++)java.util.Arrays.fill(averaged,yy*width+x,yy*width+right,p);
+                }
+                return quantize(averaged,width,height,false,threshold,false,1,true);
+            }
             if(block!=2&&block!=4&&block!=8&&block!=16)throw new IllegalArgumentException("色块参数错误");
             byte[] out=new byte[pixels.length];
             for(int y=0;y<height;y+=block)for(int x=0;x<width;x+=block){
@@ -34,7 +47,7 @@ public final class ImageRaster {
                     float g=clamp(((p>>>8)&255)+(dither?current[1][x+1]:0));
                     float b=clamp((p&255)+(dither?current[2][x+1]:0));
                     float score=Float.MAX_VALUE;
-                    for(int k=0;k<4;k++){int c=COLORS[k];float dr=r-((c>>>16)&255),dg=g-((c>>>8)&255),db=b-(c&255),s=dr*dr+dg*dg+db*db;if(s<score){score=s;best=k;}}
+                    for(int k=0;k<4;k++){if(perceptual&&k>=2&&Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))<12)continue;int c=COLORS[k];float dr=r-((c>>>16)&255),dg=g-((c>>>8)&255),db=b-(c&255),s=dr*dr+dg*dg+db*db;if(perceptual){float dy=(299*dr+587*dg+114*db)/1000f,du=db-dy,dv=dr-dy;s=4*dy*dy+du*du+dv*dv;}if(s<score){score=s;best=k;}}
                     if(dither){int c=COLORS[best];spread(current[0],next[0],x,r-((c>>>16)&255));spread(current[1],next[1],x,g-((c>>>8)&255));spread(current[2],next[2],x,b-(c&255));}
                 }
                 codes[index]=(byte)best;

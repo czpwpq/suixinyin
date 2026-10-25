@@ -21,7 +21,33 @@ public final class PanelImage {
         public final byte[] packed;
         public final String settings;
         public final String panelType;
-        Prepared(Bitmap preview,byte[] packed,String settings,String panelType){this.preview=preview;this.packed=packed;this.settings=settings;this.panelType=panelType;}
+        /** Display RGB for the encoded K/W/Y/R indices; does not change transport codes. */
+        public final int[] palette;
+        Prepared(Bitmap preview,byte[] packed,String settings,String panelType){this(preview,packed,settings,panelType,PALETTE);}
+        Prepared(Bitmap preview,byte[] packed,String settings,String panelType,int[] palette){this.preview=preview;this.packed=packed;this.settings=settings;this.panelType=panelType;this.palette=palette.clone();}
+    }
+    /** Encode an already quantized image with the existing A0/A1 layout, without another color pass. */
+    public static Prepared fromIndexed(byte[] codes,String panelType) {
+        return fromIndexed(codes,panelType,PALETTE,"黑白黄红四色");
+    }
+    public static Prepared fromIndexed(byte[] codes,String panelType,int[] palette,String settings) {
+        if(codes==null||codes.length!=PanelProtocol.WIDTH*PanelProtocol.HEIGHT)throw new IllegalArgumentException("屏幕像素码长度错误");
+        if(panelType==null||palette==null||palette.length!=4)throw new IllegalArgumentException("屏幕类型或四色色板无效");
+        int[] colors=palette.clone();
+        for(int color:colors)if((color>>>24)!=255)throw new IllegalArgumentException("四色色板必须不透明");
+        for(byte code:codes)if(code<0||code>3)throw new IllegalArgumentException("屏幕像素码必须为 0 到 3");
+        PanelType type=panelType.isEmpty()?PanelType.A1:PanelType.parse(panelType);
+        byte[] packed=type.pack(codes);
+        // Render from the packed payload's decoded indices, including physical A0 row mapping.
+        int[] decoded=type.preview(packed);
+        for(int i=0;i<decoded.length;i++) {
+            int code=0;
+            while(code<4&&decoded[i]!=PALETTE[code])code++;
+            if(code==4)throw new IllegalStateException("屏幕编码色板无效");
+            decoded[i]=colors[code];
+        }
+        Bitmap image=Bitmap.createBitmap(decoded,PanelProtocol.WIDTH,PanelProtocol.HEIGHT,Bitmap.Config.ARGB_8888);
+        return new Prepared(image,packed,settings==null?"":settings,panelType,colors);
     }
     public static Bitmap load(ContentResolver resolver,Uri uri) throws Exception {
         BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;
@@ -64,7 +90,14 @@ public final class PanelImage {
         return Bitmap.createBitmap(source,0,0,source.getWidth(),source.getHeight(),rotate,true);
     }
     public static Prepared prepare(Bitmap source,int rotation,boolean cover,boolean dither,int block,boolean binary,int threshold,boolean cropped,String panelType) {
+        return prepare(source,rotation,cover,dither,block,binary,threshold,cropped,panelType,PhotoAdjust.ORIGINAL);
+    }
+    public static Prepared prepare(Bitmap source,int rotation,boolean cover,boolean dither,int block,boolean binary,int threshold,boolean cropped,String panelType,PhotoAdjust photo) {
+        return prepare(source,rotation,cover,dither,block,binary,threshold,cropped,panelType,photo,-1,100,photo.perceptual?1:0);
+    }
+    public static Prepared prepare(Bitmap source,int rotation,boolean cover,boolean dither,int block,boolean binary,int threshold,boolean cropped,String panelType,PhotoAdjust photo,int algorithm,int strength,int tone) {
         if(block>1)dither=false;
+        if(algorithm>=0){if(!dither)algorithm=0;if(algorithm==0||strength==0)dither=false;}
         Bitmap input=rotated(source,rotation);
         Bitmap fitted=Bitmap.createBitmap(552,768,Bitmap.Config.ARGB_8888);Canvas canvas=new Canvas(fitted);canvas.drawColor(Color.WHITE);
         float sx=552f/input.getWidth(),sy=768f/input.getHeight(),scale=cover?Math.max(sx,sy):Math.min(sx,sy);
@@ -72,12 +105,14 @@ public final class PanelImage {
         canvas.drawBitmap(input,null,new RectF((552-w)/2,(768-h)/2,(552+w)/2,(768+h)/2),new Paint(Paint.FILTER_BITMAP_FLAG));
         int[] pixels=new int[552*768];
         fitted.getPixels(pixels,0,552,0,0,552,768);
-        byte[] codes=ImageRaster.quantize(pixels,552,768,binary,threshold,dither,block);
+        // Leave letterbox margins white; adjust only the drawn image area.
+        for(int y=0;y<768;y++)for(int x=0;x<552;x++)if(x+0.5f>=(552-w)/2&&x+0.5f<(552+w)/2&&y+0.5f>=(768-h)/2&&y+0.5f<(768+h)/2)pixels[y*552+x]=photo.apply(pixels[y*552+x]);
+        byte[] codes=(!binary&&block==1&&algorithm>=0)?FourColorDither.quantize(pixels,552,768,algorithm,strength,tone):ImageRaster.quantize(pixels,552,768,binary,threshold,dither,block,photo.perceptual);
         // An unselected panel can still preview; sending requires an explicit selection.
         PanelType type=panelType.isEmpty()?PanelType.A1:PanelType.parse(panelType);
         byte[] packed=type.pack(codes);
         Bitmap image=Bitmap.createBitmap(type.preview(packed),552,768,Bitmap.Config.ARGB_8888);
         String settings="屏幕："+(panelType.isEmpty()?"尚未选择":panelType)+" · "+(binary?"黑白二值化 · 阈值 "+threshold:"黑白黄红四色")+" · 简化："+(block==1?"原始细节":block+"×"+block+" 色块")+" · 抖动："+(dither?"开启":"关闭")+" · "+(cropped?"已手动裁切 · ":"")+"旋转 "+rotation+"° · "+(cover?"填满":"留白");
-        return new Prepared(image,packed,settings,panelType);
+        return new Prepared(image,packed,settings+" · "+photo.describe()+(algorithm>=0&&!binary&&block==1?" · "+FourColorDither.names()[dither?algorithm:0]+" / 强度 "+strength+"% / "+new String[]{"原版 RGB","感知色彩","实验暖调"}[tone]:" · 原版色块/二值化处理"),panelType);
     }
 }

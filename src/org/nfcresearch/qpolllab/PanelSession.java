@@ -14,6 +14,7 @@ public final class PanelSession {
     public interface Events {void emit(String kind,String message);}
     public static void run(Tag tag,String mode,File jobFile,File stopFile,Events events) throws Exception {
         byte[] config=read(jobFile,8192);JSONObject job=new JSONObject(new String(config,"UTF-8"));
+        String expectedUid=job.optString("expectedUid","");if(!expectedUid.isEmpty()&&!expectedUid.equalsIgnoreCase(PanelProtocol.toHex(tag.getId())))throw new IllegalArgumentException("定时刷写检测到不同墨水屏，已停止；未发送 APDU");
         byte[] image=null;
         if(mode.equals("refresh")) {
             PanelType type=PanelType.parse(job.optString("panelType",""));

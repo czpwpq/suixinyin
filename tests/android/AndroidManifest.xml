@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.nfcresearch.qpolllab.cardtests">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+    <application android:label="墨水屏排版测试" android:allowBackup="false" />
+    <instrumentation android:name="org.nfcresearch.qpolllab.CardRendererInstrumentation"
+        android:targetPackage="org.nfcresearch.qpolllab.easy" android:label="Native card renderer checks" />
+</manifest>

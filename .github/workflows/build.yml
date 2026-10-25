@@ -1,0 +1,56 @@
+name: Regression checks and CI-only APK
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      READER_TEST_DEPS: ${{ runner.temp }}/reader-test-deps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install pinned Android SDK
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Prepare host-only test dependencies
+        run: |
+          mkdir -p build "$READER_TEST_DEPS"
+          python -m pip install --disable-pip-version-check --target "$READER_TEST_DEPS" 'lzokay==2.1.0'
+      - name: Photo, card and transfer JVM regressions
+        run: python tests/run_java.py
+      - name: Reader protocol, text and independent LZO decoding
+        run: python tests/reader/run_tests.py
+      - name: Activation input, proof, discovery and actual shell-command checks
+        run: python tests/activation/run_tests.py
+      - name: RSA, X509, loopback fake-ADB and native alignment checks
+        run: python tests/activation/run_adb_crypto_tests.py
+      - name: Build and verify CI-only APK with an ephemeral signing key
+        run: python build.py
+      - name: Compile instrumentation checks (not Android device execution)
+        run: python tests/android/build_card_tests.py
+      - name: Label artifacts as test-only
+        run: |
+          cat > dist/CI-TEST-ONLY.txt <<'EOF'
+          These APKs are CI test artifacts, not official release APKs.
+          This run generates an ephemeral debug signing key.
+          The resulting APKs may not upgrade an official installed release.
+          Use the verified APK from GitHub Releases for normal installation.
+          Instrumentation APK compilation does not mean Android tests ran.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suixinyin-ci-test-only-${{ github.run_id }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14

@@ -170,9 +170,8 @@ public final class QPollWorker {
             if (seconds < 1 || seconds > 60) throw new IllegalArgumentException("时长超出当前模式允许范围");
             File stopFile = new File(args[2]);
             if (stopFile.exists()) { emit("END", "已取消，未启动寻卡"); return; }
-            // App creates this private file before invoking root; no global writable lock path.
-            try (RandomAccessFile lockFile = new RandomAccessFile(args[3], "rw"); FileLock lock = lockFile.getChannel().tryLock()) {
-                if (lock == null) throw new IllegalStateException("另一轮测试正在运行");
+            // One persistent shell-owned private lock also excludes the reader worker.
+            try (NfcSessionLock.Lease lock = NfcSessionLock.acquire(args[3])) {
                 try {
                 init();
                 if (args[0].equals("inspect")) {
