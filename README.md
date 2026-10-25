@@ -2,7 +2,7 @@
 
 把照片、文字和日常信息，留在无源四色墨水屏上。
 
-随心印是一款面向兼容华为 nova NFC 墨水屏手机壳的 Android 应用。它把照片创作、四色处理、日历天气、内容卡片和 TXT 阅读放在同一个 App 中，支持内置无线调试激活，无需为本应用单独安装 Shizuku 管理器。
+随心印是一款面向兼容华为 nova 3.98 A0A1 NFC 墨水屏手机壳的 Android 应用。它把照片创作、四色处理、日历天气、内容卡片和 TXT 阅读放在同一个 App 中，支持内置无线调试激活，无需为本应用单独安装 Shizuku 管理器。
 
 **[下载首版 APK](https://github.com/czpwpq/suixinyin/releases/latest)** · [首版发布说明](docs/RELEASE_V1_0_0.md) · [内置激活操作](docs/GUIDE_2_20_TEST3.md) · [来源与致谢](CREDITS.md) · [完整来源/许可证](docs/OPEN_SOURCE_SOURCES.md)
 
