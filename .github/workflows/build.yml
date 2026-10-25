@@ -9,8 +9,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      READER_TEST_DEPS: ${{ runner.temp }}/reader-test-deps
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,6 +23,8 @@ jobs:
         run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
       - name: Prepare host-only test dependencies
         run: |
+          export READER_TEST_DEPS="$RUNNER_TEMP/reader-test-deps"
+          echo "READER_TEST_DEPS=$READER_TEST_DEPS" >> "$GITHUB_ENV"
           mkdir -p build "$READER_TEST_DEPS"
           python -m pip install --disable-pip-version-check --target "$READER_TEST_DEPS" 'lzokay==2.1.0'
       - name: Photo, card and transfer JVM regressions
