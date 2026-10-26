@@ -13,6 +13,9 @@ import java.util.Arrays;
 final class AdbIdentityStore {
     private static final int MAGIC=0x53584131,MAX_PART=16384;
     private static AtomicFile file(Context context){return new AtomicFile(new File(context.getNoBackupFilesDir(),"local-adb-identity.bin"));}
+    static synchronized boolean exists(Context context){
+        File base=file(context).getBaseFile();return base.isFile()||new File(base.getPath()+".bak").isFile();
+    }
     static synchronized AdbIdentityMaterial loadOrCreate(Context context) throws Exception {
         AtomicFile file=file(context);FileInputStream existing;
         try{existing=file.openRead();}catch(FileNotFoundException missing){return create(file);}

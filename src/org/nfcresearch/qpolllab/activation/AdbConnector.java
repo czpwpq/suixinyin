@@ -70,6 +70,8 @@ public final class AdbConnector implements Closeable {
         }
     }
     public static void clearIdentity(Context context){AdbIdentityStore.clear(context.getApplicationContext());}
+    /** Does not create a key or initiate pairing; also supports identities from v1.0.0. */
+    public static boolean hasSavedIdentity(Context context){return AdbIdentityStore.exists(context.getApplicationContext());}
     @Override public void close(){
         if(!closed.compareAndSet(false,true))return;PairingConnectionCtx p=pairing;pairing=null;if(p!=null)p.close();
         AdbConnection c=connection;connection=null;if(c!=null)try{c.close();}catch(IOException ignored){}

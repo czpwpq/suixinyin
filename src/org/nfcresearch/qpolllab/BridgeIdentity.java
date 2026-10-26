@@ -8,7 +8,7 @@ package org.nfcresearch.qpolllab;
 public final class BridgeIdentity {
     public static final String PACKAGE_NAME="org.nfcresearch.qpolllab.easy";
     public static final String DESCRIPTOR="org.nfcresearch.qpolllab.easy.NfcSession";
-    public static final int SERVICE_VERSION=34;
+    public static final int SERVICE_VERSION=35;
     public static final int PROTOCOL_VERSION=1;
     public static final int INFO_TRANSACTION=4;
     private BridgeIdentity() { }

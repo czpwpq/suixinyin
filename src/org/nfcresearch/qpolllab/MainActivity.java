@@ -24,7 +24,7 @@ import org.json.JSONObject;
 import rikka.shizuku.Shizuku;
 import android.os.Parcel;
 
-public final class MainActivity extends Activity {
+public final class MainActivity extends Activity implements InternalActivationController.Listener {
     private final Handler main=new Handler();
     private final ArrayList<View> idleControls=new ArrayList<>();
     private final StringBuilder transcript=new StringBuilder();
@@ -140,7 +140,8 @@ public final class MainActivity extends Activity {
         if((busy||editorObserver!=null)&&index!=mainPage){Toast.makeText(this,"刷写中，请保持贴合；结束后可切换页面。",Toast.LENGTH_SHORT).show();return;}
         mainPage=index;for(int i=0;i<mainPages.length;i++){mainPages[i].setVisibility(i==index?View.VISIBLE:View.GONE);mainTabs[i].setTextColor(i==index?AppUi.INK:AppUi.MUTED);mainTabs[i].setTypeface(null,i==index?Typeface.BOLD:Typeface.NORMAL);}if(homeMore!=null)homeMore.setVisibility(index==0?View.VISIBLE:View.GONE);if(photoWorkspace!=null)photoWorkspace.setActive(index==0);
     }
-    private void refreshConnectionUi(){if(studio!=null)studio.refreshConnection();if(photoWorkspace!=null)photoWorkspace.refreshConnection();if(homeConnection!=null){String value=connectionStatus.getText().toString();boolean ready=value.contains("身份已验证")||value.contains("可以刷屏");homeConnection.setText(ready?"● 已连接":useRoot.isChecked()?"● Root 模式":"● 未连接");homeConnection.setTextColor(ready?AppUi.INK:AppUi.MUTED);homeConnection.setContentDescription(value);}}
+    private void refreshConnectionUi(){if(studio!=null)studio.refreshConnection();if(photoWorkspace!=null)photoWorkspace.refreshConnection();if(homeConnection!=null){String value=connectionStatus.getText().toString();boolean ready=value.contains("身份已验证")||value.contains("可以刷屏"),connecting=binding||(useInternal.isChecked()&&InternalActivationController.get(this).isBusy());homeConnection.setText(ready?"● 已连接":connecting?"● 连接中":useRoot.isChecked()?"● Root 模式":"● 未连接");homeConnection.setTextColor(ready?AppUi.INK:AppUi.MUTED);homeConnection.setContentDescription(value);}}
+    @Override public void changed(){if(!destroyed&&resumed&&useInternal!=null&&useInternal.isChecked())connectInternal(false);}
     private void copyLogs(){((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("随心印日志",transcript.toString()));Toast.makeText(this,"日志已复制",Toast.LENGTH_SHORT).show();}
     private void saveLogs(){try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE,"随心印-日志.txt"),71);}catch(android.content.ActivityNotFoundException e){Toast.makeText(this,"没有可用的文件保存器",Toast.LENGTH_SHORT).show();}}
     private final Shizuku.OnRequestPermissionResultListener permissionResult=(code,result)->{if(code==28){main.removeCallbacks(permissionTimeout);permissionPending=false;if(!useShizuku.isChecked())return;if(result==android.content.pm.PackageManager.PERMISSION_GRANTED)connectShizuku(false);else{afterConnection=null;connectionStatus.setText("授权被拒绝，可点击重试；列表缺失请查看恢复指引");connectionButton.setVisibility(View.VISIBLE);refreshConnectionUi();finishEditor(false,"授权未允许，请点击连接重试。");}}};
@@ -150,7 +151,17 @@ public final class MainActivity extends Activity {
     private void connectInternal(boolean ask){
         if(destroyed||!useInternal.isChecked())return;
         android.os.IBinder candidate=org.nfcresearch.qpolllab.activation.InternalBackend.photoBinder();
-        if(candidate==null){invalidateBridge("内置服务尚未激活或已失效");afterConnection=null;boolean activating=InternalActivationController.get(this).isActivating();connectionStatus.setText(activating?"内置授权服务正在激活，请等待核验完成":"内置服务未就绪，请完成激活");connectionButton.setText(activating?"查看激活进度":"打开内置激活");connectionButton.setVisibility(View.VISIBLE);refreshConnectionUi();if(ask)openActivation();return;}
+        if(candidate==null){
+            invalidateBridge("内置服务尚未激活或已失效");afterConnection=null;
+            InternalActivationController activation=InternalActivationController.get(this);
+            boolean saved=activation.hasSavedIdentity()&&!activation.needsPairing();
+            if(ask&&saved&&!activation.isBusy())activation.reconnectSaved();
+            boolean restoring=activation.isAutoRestoring(),activating=activation.isActivating();
+            connectionStatus.setText(restoring||saved||activating?activation.status():"内置服务未就绪，请完成首次激活");
+            connectionButton.setText(restoring?"查看连接进度":activating?"查看激活进度":saved?"重新连接 · 无需配对":"打开内置激活");connectionButton.setVisibility(View.VISIBLE);refreshConnectionUi();
+            if(ask){if(restoring||activating)Toast.makeText(this,"正在恢复内置连接，就绪后再点推送；不会自动重传",Toast.LENGTH_LONG).show();else if(!saved)openActivation();}
+            return;
+        }
         if(candidate==bridgeBinder&&candidate.isBinderAlive()&&BackendMode.INTERNAL.equals(bridgeBackend)){connectionStatus.setText("内置激活 身份已验证 · 可以刷屏");connectionButton.setVisibility(View.GONE);refreshConnectionUi();Runnable next=afterConnection;afterConnection=null;if(next!=null&&resumed)next.run();return;}
         if(binding&&BackendMode.INTERNAL.equals(bridgeBackend))return;
         invalidateBridge("正在校验内置后端");bridgeBackend=BackendMode.INTERNAL;binding=true;connectionButton.setVisibility(View.GONE);main.postDelayed(connectionTimeout,10000);verifyBridge(candidate);
@@ -178,7 +189,7 @@ public final class MainActivity extends Activity {
         afterConnection=next;connectShizuku(true);return false;
     }
     private void openConnection(){
-        if(useInternal.isChecked()){connectInternal(true);return;}
+        if(useInternal.isChecked()){if(InternalActivationController.get(this).isAutoRestoring())openActivation();else connectInternal(true);return;}
         if(useRoot.isChecked()){connectSelected(true);return;}
         if(Shizuku.pingBinder()){connectShizuku(true);return;}
         Intent launch=getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
@@ -237,7 +248,7 @@ public final class MainActivity extends Activity {
         useInternal=new RadioButton(this);useInternal.setId(View.generateViewId());useInternal.setText("内置激活 · 无需另装应用");backend.addView(useInternal);idleControls.add(useInternal);
         useShizuku=new RadioButton(this);useShizuku.setId(View.generateViewId());useShizuku.setText("外置 Shizuku · 备用");backend.addView(useShizuku);idleControls.add(useShizuku);
         useRoot=new RadioButton(this);useRoot.setId(View.generateViewId());useRoot.setText("Root");backend.addView(useRoot);idleControls.add(useRoot);page.addView(backend);syncBackendSelection();
-        backend.setOnCheckedChangeListener((group,id)->{afterConnection=null;permissionPending=false;main.removeCallbacks(permissionTimeout);String mode=useRoot.isChecked()?BackendMode.ROOT:useShizuku.isChecked()?BackendMode.SHIZUKU:BackendMode.INTERNAL;BackendMode.set(this,mode);invalidateBridge("授权方式已切换");try{Shizuku.unbindUserService(bridgeArgs,bridgeConnection,false);}catch(Exception ignored){}connectSelected(false);});
+        backend.setOnCheckedChangeListener((group,id)->{afterConnection=null;permissionPending=false;main.removeCallbacks(permissionTimeout);String mode=useRoot.isChecked()?BackendMode.ROOT:useShizuku.isChecked()?BackendMode.SHIZUKU:BackendMode.INTERNAL;BackendMode.set(this,mode);InternalActivationController.get(this).selectedBackendChanged();invalidateBridge("授权方式已切换");try{Shizuku.unbindUserService(bridgeArgs,bridgeConnection,false);}catch(Exception ignored){}connectSelected(false);});
         page.addView(action("内置激活设置 · 无线调试配对",v->openActivation()));
         page.addView(action("连接当前授权方式",v->connectSelected(true)));
         page.addView(action("外置 Shizuku 诊断与恢复",v->showConnectionRecovery()));
@@ -597,8 +608,8 @@ public final class MainActivity extends Activity {
         for(String name:new String[]{"kur0neko-LICENSE.txt","miaomo-LICENSE.txt","miaomo-NOTICE.txt","miaomo-THIRD-PARTY-LICENSES.txt","inkreader-LICENSE.txt","inkreader-NOTICE.txt","inkreader-THIRD-PARTY-NOTICES.txt","inkreader-lzokay-LICENSE.txt","activation-LICENSES.txt"}){body.append("\n\n—— ").append(name).append(" ——\n");try(BufferedReader in=new BufferedReader(new InputStreamReader(getAssets().open("licenses/"+name),"UTF-8"))){String line;while((line=in.readLine())!=null)body.append(line).append('\n');}catch(Exception e){body.append(e);}}
         TextView t=text(body.toString(),12,0xff263e35);t.setTextIsSelectable(true);t.setPadding(dp(16),dp(10),dp(16),dp(10));ScrollView s=new ScrollView(this);s.addView(t);new AlertDialog.Builder(this).setTitle("开源许可与来源").setView(s).setPositiveButton("关闭",null).show();
     }
-    @Override protected void onResume(){super.onResume();resumed=true;syncPanelSelection();syncBackendSelection();studio.onHostResume();if(readerShelf!=null)readerShelf.onResume();connectSelected(false);refreshConnectionUi();}
+    @Override protected void onResume(){super.onResume();resumed=true;syncPanelSelection();syncBackendSelection();studio.onHostResume();if(readerShelf!=null)readerShelf.onResume();InternalActivationController activation=InternalActivationController.get(this);activation.attach(this);activation.foregroundStarted(this);connectSelected(false);refreshConnectionUi();}
 
-    @Override protected void onStop(){stopRotation("离开应用，定时刷写已停止");studio.onHostStop();if(photoWorkspace!=null)photoWorkspace.onHostStop();resumed=false;afterConnection=null;if(busy)requestStop("页面已离开，自动停止");super.onStop();}
+    @Override protected void onStop(){stopRotation("离开应用，定时刷写已停止");studio.onHostStop();if(photoWorkspace!=null)photoWorkspace.onHostStop();resumed=false;InternalActivationController activation=InternalActivationController.get(this);activation.detach(this);activation.foregroundStopped(this);afterConnection=null;if(busy)requestStop("页面已离开，自动停止");super.onStop();}
     @Override protected void onDestroy(){unwatchInternal();stopRotation("页面关闭");studio.destroy();if(readerShelf!=null)readerShelf.destroy();if(photoWorkspace!=null)photoWorkspace.destroy();if(galleryBrowser!=null)galleryBrowser.destroy();if(settingsDialog!=null)settingsDialog.dismiss();main.removeCallbacks(permissionTimeout);editorObserver=null;destroyed=true;afterConnection=null;main.removeCallbacks(connectionTimeout);Shizuku.removeBinderReceivedListener(binderReceived);Shizuku.removeBinderDeadListener(binderDead);revision++;if(previewDialog!=null)previewDialog.dismiss();if(busy)requestStop("页面关闭，自动停止");Shizuku.removeRequestPermissionResultListener(permissionResult);try{Shizuku.unbindUserService(bridgeArgs,bridgeConnection,false);}catch(Exception ignored){}main.removeCallbacks(tick);super.onDestroy();}
 }

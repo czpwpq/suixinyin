@@ -97,7 +97,7 @@ public final class PanelClient {
         String backend=BackendMode.get(activity);
         if(BackendMode.INTERNAL.equals(backend)){
             internal=true;IBinder service=InternalBackend.readerBinder();
-            if(service==null){failure("内置服务未激活，请先在设备页完成内置激活；TXT仍可离线阅读");return;}
+            if(service==null){org.nfcresearch.qpolllab.InternalActivationController activation=org.nfcresearch.qpolllab.InternalActivationController.get(activity);failure(activation.isAutoRestoring()?"内置连接正在自动恢复，请就绪后再点连接；TXT仍可离线阅读":activation.hasSavedIdentity()&&!activation.needsPairing()?"已有本机连接记录，请在设备页重新连接，无需重复配对；TXT仍可离线阅读":"内置服务未激活，请先在设备页完成首次激活；TXT仍可离线阅读");return;}
             try{service.linkToDeath(internalDeath,0);connection.onServiceConnected(new ComponentName(BridgeIdentity.PACKAGE_NAME,"com.inkreader.PanelShizukuService"),service);}catch(Exception error){failure("内置阅读后端不可用，请重新激活");}return;
         }
         if(BackendMode.ROOT.equals(backend)){failure("阅读请先在设备页选择内置激活或外置 Shizuku；照片的直接 Root 方式仍可使用");return;}

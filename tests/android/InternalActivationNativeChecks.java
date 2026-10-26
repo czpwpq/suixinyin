@@ -7,6 +7,7 @@ import android.app.RemoteInput;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -34,18 +35,45 @@ public final class InternalActivationNativeChecks {
             try{try{first.await(0);throw new AssertionError("Replaced activation request still valid");}catch(java.util.concurrent.CancellationException expected){}check(!second.await(0),"Zero-wait activation claimed success without a delivery");}
             finally{first.cancel();second.cancel();}
         }
-        Activity page=instrumentation.startActivitySync(new Intent(context,InternalActivationActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        // UI checks must not contact ADB on a phone that already has a saved identity.
+        // Use the same persisted pause as the explicit Stop action, restoring it below.
+        SharedPreferences recovery=context.getSharedPreferences("internal-activation",Context.MODE_PRIVATE);
+        boolean hadPause=recovery.contains("reconnectPaused"),oldPause=recovery.getBoolean("reconnectPaused",false);
+        check(recovery.edit().putBoolean("reconnectPaused",true).commit(),"Unable to pause automatic recovery for UI checks");
+        Activity page=null;
         try{
+            page=instrumentation.startActivitySync(new Intent(context,InternalActivationActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));final Activity checkedPage=page;
             final Throwable[] failed=new Throwable[1];instrumentation.runOnMainSync(()->{try{
                 if(Build.VERSION.SDK_INT<30)return;
-                EditText code=(EditText)read(page,"code");check(!code.isSaveEnabled(),"Pairing code can enter automatic saved state");
+                EditText code=(EditText)read(checkedPage,"code");check(!code.isSaveEnabled(),"Pairing code can enter automatic saved state");
                 code.setText("1234567");check(code.getText().length()==6,"Pairing code length not limited");code.setText("");
-                InternalActivationController controller=InternalActivationController.get(context);check(!controller.isBusy(),"Opening activation page started a network/activation operation");
+                InternalActivationController controller=InternalActivationController.get(context);check(!controller.isBusy(),"Paused activation page started a network/activation operation");
+                savedConnectionUi((InternalActivationActivity)checkedPage,controller);
                 notificationAndSettings(context,controller);
-                fixedStatusAndGuardedBack((InternalActivationActivity)page,controller);
+                fixedStatusAndGuardedBack((InternalActivationActivity)checkedPage,controller);
             }catch(Throwable error){failed[0]=error;}});
             if(failed[0]!=null)throw new AssertionError(failed[0]);
-        }finally{instrumentation.runOnMainSync(page::finish);}
+        }finally{
+            if(page!=null){final Activity ending=page;instrumentation.runOnMainSync(ending::finish);instrumentation.waitForIdleSync();}
+            SharedPreferences.Editor restore=recovery.edit();if(hadPause)restore.putBoolean("reconnectPaused",oldPause);else restore.remove("reconnectPaused");check(restore.commit(),"Unable to restore automatic-recovery pause preference");
+        }
+    }
+    private static void savedConnectionUi(InternalActivationActivity page,InternalActivationController controller)throws Exception{
+        android.view.View saved=(android.view.View)read(page,"savedConnectionCard"),first=(android.view.View)read(page,"firstSetup"),toggle=(android.view.View)read(page,"firstSetupToggle");
+        android.widget.Button reconnect=(android.widget.Button)read(page,"reconnect");
+        check(controller.ready()||reconnect.getText().toString().contains("无需配对码"),"Saved connection action implies pairing must be repeated");
+        java.lang.reflect.Method layout=InternalActivationActivity.class.getDeclaredMethod("updateSetupVisibility",boolean.class,boolean.class);layout.setAccessible(true);
+        Field expanded=InternalActivationActivity.class.getDeclaredField("pairingExpanded"),chosen=InternalActivationActivity.class.getDeclaredField("pairingChoiceMade");expanded.setAccessible(true);chosen.setAccessible(true);boolean oldExpanded=expanded.getBoolean(page),oldChosen=chosen.getBoolean(page);
+        EditText port=(EditText)read(page,"connectionPort");String originalPort=port.getText().toString();Field last=InternalActivationActivity.class.getDeclaredField("lastConnectPort");last.setAccessible(true);int oldLast=last.getInt(page);
+        try{
+            chosen.setBoolean(page,false);layout.invoke(page,true,false);
+            check(saved.getVisibility()==android.view.View.VISIBLE&&first.getVisibility()==android.view.View.GONE&&toggle.getVisibility()==android.view.View.VISIBLE,"Saved identity does not collapse initial pairing steps");
+            expanded.setBoolean(page,true);chosen.setBoolean(page,true);layout.invoke(page,true,false);check(first.getVisibility()==android.view.View.VISIBLE,"Explicit pairing expansion is discarded");
+            layout.invoke(page,true,true);check(saved.getVisibility()==android.view.View.GONE&&first.getVisibility()==android.view.View.VISIBLE,"Rejected identity still hides required pairing settings");
+            layout.invoke(page,false,false);check(saved.getVisibility()==android.view.View.GONE&&first.getVisibility()==android.view.View.VISIBLE,"First use hides pairing setup");
+            java.lang.reflect.Method prefill=InternalActivationActivity.class.getDeclaredMethod("prefillConnectionPort",int.class);prefill.setAccessible(true);prefill.invoke(page,40567);check("40567".contentEquals(port.getText()),"Remembered connection port is not shown");prefill.invoke(page,0);check("40567".contentEquals(port.getText()),"An invalid remembered port erased manual input");
+            check(!controller.isBusy(),"Layout checks started an activation operation");
+        }finally{expanded.setBoolean(page,oldExpanded);chosen.setBoolean(page,oldChosen);port.setText(originalPort);last.setInt(page,oldLast);page.changed();}
     }
     private static void fixedStatusAndGuardedBack(InternalActivationActivity page,InternalActivationController controller)throws Exception{
         android.view.View status=(android.view.View)read(page,"statusCard");

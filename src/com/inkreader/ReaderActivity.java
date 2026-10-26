@@ -786,6 +786,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
 
     @Override protected void onResume() {
         super.onResume();foreground=true;
+        org.nfcresearch.qpolllab.InternalActivationController.get(this).foregroundStarted(this);
         if(book==null)return;
         String currentTheme=Ui.prefs(this).getString("theme","paper");
         if(!currentTheme.equals(activeTheme)){saveProgress();recreate();return;}
@@ -798,7 +799,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         }
     }
     @Override protected void onPause(){foreground=false;saveProgress();super.onPause();}
-    @Override protected void onStop(){saveProgress();stopPanel("阅读会话已暂停，请手动连接");super.onStop();}
+    @Override protected void onStop(){saveProgress();stopPanel("阅读会话已暂停，请手动连接");org.nfcresearch.qpolllab.InternalActivationController.get(this).foregroundStopped(this);super.onStop();}
 
     private void resetPanelTransferState() {
         pageReady = false;

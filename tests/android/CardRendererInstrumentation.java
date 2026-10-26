@@ -17,7 +17,13 @@ public final class CardRendererInstrumentation extends Instrumentation {
 
     @Override public void onStart() {
         Bundle result = new Bundle();
+        android.content.SharedPreferences recovery=getTargetContext().getSharedPreferences("internal-activation",android.content.Context.MODE_PRIVATE);
+        boolean hadPause=recovery.contains("reconnectPaused"),oldPause=recovery.getBoolean("reconnectPaused",false);
+        // Native UI tests exercise real Activities, but must not reconnect an installed user's ADB.
+        boolean paused=recovery.edit().putBoolean("reconnectPaused",true).commit();
+        int resultCode=Activity.RESULT_CANCELED;
         try {
+            check(paused,"Unable to pause automatic recovery before native UI checks");
             BridgeNativeChecks.run();
             StudioImageNativeChecks.run();
             CardFramesNativeChecks.run();
@@ -29,11 +35,13 @@ public final class CardRendererInstrumentation extends Instrumentation {
             InternalActivationNativeChecks.run(this);
             io.github.muntashirakon.adb.AdbPairingNativeChecks.run();
             result.putString("stream", "CardRendererInstrumentation: PASS\nNative fixtures saved to target external-files/card-tests\n");
-            finish(Activity.RESULT_OK, result);
+            resultCode=Activity.RESULT_OK;
         } catch (Throwable failure) {
             result.putString("stream", "CardRendererInstrumentation: FAIL\n" + android.util.Log.getStackTraceString(failure));
-            finish(Activity.RESULT_CANCELED, result);
+        } finally {
+            android.content.SharedPreferences.Editor restore=recovery.edit();if(hadPause)restore.putBoolean("reconnectPaused",oldPause);else restore.remove("reconnectPaused");if(!restore.commit()){resultCode=Activity.RESULT_CANCELED;result.putString("stream","Unable to restore automatic-recovery preference after native checks");}
         }
+        finish(resultCode,result);
     }
 
     private void runCases() throws Exception {

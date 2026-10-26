@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.nfcresearch.qpolllab.easy" android:versionCode="33" android:versionName="2.20-test3">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.nfcresearch.qpolllab.easy" android:versionCode="34" android:versionName="1.0.1-test1">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.INTERNET" />
