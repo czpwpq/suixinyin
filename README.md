@@ -9,8 +9,8 @@
 > 当前公开版本为 **v1.0.1**，修复关闭重开 App 后的内置连接恢复。为保留用户刚测试过的安装包，本次 APK 内部版本仍为 **1.0.1-test1（versionCode 34）**，安装包未重新构建或更换签名。[首个版本 v1.0.0](docs/RELEASE_V1_0_0.md) 的说明保留供查阅。
 
 ## 哪些型号可用
-目前可免root直接使用NFC的手机，经测试有小米17Pro、红米k90pm、
-很多手机临时rootroot可用，已知红米note12T，oppo findx8s+，小米14，小米 14ultra，小米13 pro，红米note11tp，红米k80u，小米15要移植小米17的st（https://github.com/Freeze-Over/nfc-15pro-st54l）
+目前可免root直接使用NFC的手机，经测试有小米17Pro、红米k90pm、红米k80u
+很多手机临时rootroot可用，已知红米note12T，oppo findx8s+，小米14，小米 14ultra，小米13 pro，红米note11tp，小米15要移植小米17的st（https://github.com/Freeze-Over/nfc-15pro-st54l）
 
 ## 功能
 
